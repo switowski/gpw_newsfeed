@@ -28,6 +28,8 @@ COMPANIES = [
     'RAWLPLUG',
     'TORPOL',
     'VISTULA',
+    'STALPROD',
+    'IPX',
     # 'SP-500'
 ]
 
