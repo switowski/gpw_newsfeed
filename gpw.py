@@ -195,42 +195,48 @@ def main(verbose=False, open_in_browser=True):
             date_tag = single_news.find(class_='record-date')
             date = date_tag.text
             news_output += generate_news_element(company, source, title_url, title_text, date)
-        # GET TECHNICAL ANALYSIS
-        # Load the HTML
-        page = requests.get(AT_URL + company)
-        # Page is not properly encoded
-        page = page.text.encode('utf8')
-        soup = BeautifulSoup(page, 'lxml')
-        # From here, get the "formacje swiecowe" and "sygnaly AT"
-        candles_element = soup.find(id="profile-candlesticks")
-        candles = candles_element.findAll('tr')
-        for candle in candles:
-            candle_name_class = candle.find('td', class_='name').attrs.get('class', ['name'])
-            candle_link = candle.find('td', class_='name').find('a')
-            url = candle_link.attrs.get('href', '#')
-            text = candle_link.attrs.get('title', 'Error')
-            date = candle.find('td', class_='value').text
-            # candle_name_class should now contain only 'name' and down/up
-            # After we call 'remove' it's removed from the DOM object, so
-            # this has to be the last action
-            direction = candle_name_class.remove('name')
 
-            at += generate_at_element(company, direction, url, text, date)
+        # AT is not working (dates are in wrong format and using directly
+        # websites for signals and candles requires JS to be run, which BS4
+        # doesn't support)
 
-        signals_element = soup.find(id="profile-signals")
-        signals = signals_element.findAll('tr')
-        for signal in signals:
-            signal_name_class = signal.find('td', class_='name').attrs.get('class', ['name'])
-            signal_link = signal.find('td', class_='name').find('a')
-            url = signal_link.attrs.get('href', '#')
-            text = signal_link.attrs.get('title', 'Error')
-            date = signal.find('td', class_='value').text
-            # candle_name_class should now contain only 'name' and down/up
-            direction = signal_name_class.remove('name')
+        # # GET TECHNICAL ANALYSIS
+        # # Load the HTML
+        # page = requests.get(AT_URL + company)
+        # # Page is not properly encoded
+        # page = page.text.encode('utf8')
+        # soup = BeautifulSoup(page, 'lxml')
+        # # From here, get the "formacje swiecowe" and "sygnaly AT"
+        # candles_element = soup.find(id="profile-candlesticks")
+        # candles = candles_element.findAll('tr')
+        # for candle in candles:
+        #     candle_name_class = candle.find('td', class_='name').attrs.get('class', ['name'])
+        #     candle_link = candle.find('td', class_='name').find('a')
+        #     url = candle_link.attrs.get('href', '#')
+        #     text = candle_link.attrs.get('title', 'Error')
+        #     date = candle.find('td', class_='value').text
+        #     # candle_name_class should now contain only 'name' and down/up
+        #     # After we call 'remove' it's removed from the DOM object, so
+        #     # this has to be the last action
+        #     direction = candle_name_class.remove('name')
 
-            at += generate_at_element(company, direction, url, text, date)
+        #     at += generate_at_element(company, direction, url, text, date)
 
-    html_output = generate_html(news_output, at)
+        # signals_element = soup.find(id="profile-signals")
+        # signals = signals_element.findAll('tr')
+        # for signal in signals:
+        #     signal_name_class = signal.find('td', class_='name').attrs.get('class', ['name'])
+        #     signal_link = signal.find('td', class_='name').find('a')
+        #     url = signal_link.attrs.get('href', '#')
+        #     text = signal_link.attrs.get('title', 'Error')
+        #     date = signal.find('td', class_='value').text
+        #     # candle_name_class should now contain only 'name' and down/up
+        #     direction = signal_name_class.remove('name')
+
+        #     at += generate_at_element(company, direction, url, text, date)
+
+    # html_output = generate_html(news_output, at)
+    html_output = generate_html(news_output, '')
     store_output(html_output)
     print "Finished"
     if open_in_browser:
