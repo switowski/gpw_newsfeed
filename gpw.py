@@ -10,7 +10,9 @@ $ pip install requests
 from bs4 import BeautifulSoup
 from subprocess import call
 
+import argparse
 import codecs
+import datetime
 import requests
 import os
 
@@ -73,7 +75,8 @@ HTML_TEMPLATE = """
                         <tr>
                             <th>Date</th>
                             <th>Company</th>
-                            <th>Signal or candle</th>
+                            <th>What</th>
+                            <th>Type</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -92,8 +95,8 @@ HTML_TEMPLATE = """
                     "order": [[ 0, "desc" ]]
                     });
                 $('#at').DataTable({
-                    // Uncomment to show 100 records by default
-                    // 'iDisplayLength': 100,
+                    // show 100 records by default
+                    'iDisplayLength': 50,
                     // Order by first column (date) by default
                     "order": [[ 0, "desc" ]]
                     });
@@ -131,8 +134,54 @@ AT_ELEMENT = """
     <td class="title %(direction)s">
         <a href='%(url)s'>%(text)s</a>
     </td>
+    <td class="at_type">
+        %(at_type)s
+    </td>
 </tr>
 """
+
+
+MONTHS = {
+    'sty': '01',
+    'lut': '02',
+    'mar': '03',
+    'kwi': '04',
+    'maj': '05',
+    'cze': '06',
+    'lip': '07',
+    'sie': '08',
+    'wrz': '09',
+    'pa\xc5\xba': '10',
+    'lis': '11',
+    'gru': '12',
+}
+
+def parse_date(date):
+    """Gets the ugly and random data format from the website and returns
+    normalized data
+    """
+    now = datetime.date.today()
+    current_year = datetime.date.today().year
+
+    parts = date.split()
+    if len(parts) == 1:
+        # This situation shouldn't happen. Data has at least 2 parts
+        return 'ERROR'
+    elif len(parts) >= 2:
+        day = int(parts[0])
+        month = int(MONTHS.get(parts[1].encode('utf-8'), 'ERROR'))
+        year = current_year
+        # Get the year - if the day and month from the date + current year is
+        # in the future from now, it means the year in the date is last year
+        if datetime.date(year, month, day) > now:
+            year = year- 1
+    try:
+        time = parts[2]
+    except IndexError:
+        # There was no time, use default time
+        time = '00:00'
+    return "%s-%02d-%02d %s" % (year, month, day, time)
+
 
 def generate_news_element(company, source, title_url, title_text, date):
     """Generate HTML for one element."""
@@ -145,14 +194,15 @@ def generate_news_element(company, source, title_url, title_text, date):
         'date': date
     }
 
-def generate_at_element(company, direction, url, text, date):
+def generate_at_element(company, direction, url, text, date, at_type):
     """Generate HTML for one element."""
     return AT_ELEMENT % {
         'company': company,
         'direction': direction,
         'url': url,
         'text': text,
-        'date': date
+        'date': date,
+        'at_type': at_type
     }
 
 
@@ -196,47 +246,54 @@ def main(verbose=False, open_in_browser=True):
             date = date_tag.text
             news_output += generate_news_element(company, source, title_url, title_text, date)
 
-        # AT is not working (dates are in wrong format and using directly
-        # websites for signals and candles requires JS to be run, which BS4
-        # doesn't support)
+        # GET TECHNICAL ANALYSIS
+        # Load the HTML
+        page = requests.get(AT_URL + company)
+        # Page is not properly encoded
+        page = page.text.encode('utf8')
+        soup = BeautifulSoup(page, 'lxml')
+        # From here, get the "formacje swiecowe" and "sygnaly AT"
+        candles_element = soup.find(id="profile-candlesticks")
+        candles = candles_element.findAll('tr')
+        for candle in candles:
+            candle_name_class = candle.find('td', class_='name').attrs.get('class', ['name'])
+            candle_link = candle.find('td', class_='name').find('a')
+            url = BASE_URL + candle_link.attrs.get('href', '#')
+            text = candle_link.attrs.get('title', 'Error')
+            if text == 'Error':
+                raise 'ups'
+            date = candle.find('td', class_='value').text
+            # Normalize date
+            date = parse_date(date)
+            # candle_name_class should now contain only 'name' and down/up
+            # After we call 'remove' it's removed from the DOM object, so
+            # this has to be the last action
+            candle_name_class.remove('name')
+            direction = candle_name_class[0]
+            at_type = 'Candle'
 
-        # # GET TECHNICAL ANALYSIS
-        # # Load the HTML
-        # page = requests.get(AT_URL + company)
-        # # Page is not properly encoded
-        # page = page.text.encode('utf8')
-        # soup = BeautifulSoup(page, 'lxml')
-        # # From here, get the "formacje swiecowe" and "sygnaly AT"
-        # candles_element = soup.find(id="profile-candlesticks")
-        # candles = candles_element.findAll('tr')
-        # for candle in candles:
-        #     candle_name_class = candle.find('td', class_='name').attrs.get('class', ['name'])
-        #     candle_link = candle.find('td', class_='name').find('a')
-        #     url = candle_link.attrs.get('href', '#')
-        #     text = candle_link.attrs.get('title', 'Error')
-        #     date = candle.find('td', class_='value').text
-        #     # candle_name_class should now contain only 'name' and down/up
-        #     # After we call 'remove' it's removed from the DOM object, so
-        #     # this has to be the last action
-        #     direction = candle_name_class.remove('name')
+            at += generate_at_element(company, direction, url, text, date, at_type)
 
-        #     at += generate_at_element(company, direction, url, text, date)
+        signals_element = soup.find(id="profile-signals")
+        signals = signals_element.findAll('tr')
+        for signal in signals:
+            signal_name_class = signal.find('td', class_='name').attrs.get('class', ['name'])
+            signal_link = signal.find('td', class_='name').find('a')
+            url = BASE_URL + signal_link.attrs.get('href', '#')
+            text = signal_link.text
+            if text == 'Error':
+                raise 'ups'
+            date = signal.find('td', class_='value').text
+            # Normalize date
+            date = parse_date(date)
+            # candle_name_class should now contain only 'name' and down/up
+            signal_name_class.remove('name')
+            direction = signal_name_class[0]
+            at_type = 'Signal'
 
-        # signals_element = soup.find(id="profile-signals")
-        # signals = signals_element.findAll('tr')
-        # for signal in signals:
-        #     signal_name_class = signal.find('td', class_='name').attrs.get('class', ['name'])
-        #     signal_link = signal.find('td', class_='name').find('a')
-        #     url = signal_link.attrs.get('href', '#')
-        #     text = signal_link.attrs.get('title', 'Error')
-        #     date = signal.find('td', class_='value').text
-        #     # candle_name_class should now contain only 'name' and down/up
-        #     direction = signal_name_class.remove('name')
+            at += generate_at_element(company, direction, url, text, date, at_type)
 
-        #     at += generate_at_element(company, direction, url, text, date)
-
-    # html_output = generate_html(news_output, at)
-    html_output = generate_html(news_output, '')
+    html_output = generate_html(news_output, at)
     store_output(html_output)
     print "Finished"
     if open_in_browser:

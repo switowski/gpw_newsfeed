@@ -1,6 +1,6 @@
-.up {
-  color: #f00;
-}
-.down {
+.up a {
   color: #060;
+}
+.down a {
+  color: #f00;
 }
