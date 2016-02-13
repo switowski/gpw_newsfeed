@@ -14,8 +14,10 @@ import codecs
 import requests
 import os
 
-# biznesradar will be the source of news
-BASE_URL = "http://www.biznesradar.pl/wiadomosci/"
+# we use biznesradar as a source website
+BASE_URL = "http://www.biznesradar.pl/"
+NEWS_URL = "http://www.biznesradar.pl/wiadomosci/"
+AT_URL = "http://www.biznesradar.pl/notowania/"
 
 # Name of the HTML file
 FILE_NAME = "gpw.html"
@@ -41,28 +43,57 @@ HTML_TEMPLATE = """
         <title>GPW News</title>
         <script src="./js/jquery-1.12.0.min.js"></script>
         <script src="./js/jquery.dataTables.min.js"></script>
-        <link rel="stylesheet" type="text/css" href="./css/jquery.dataTables.min.css">
+        <script src="./js/dataTables.bootstrap.min.js"></script>
+        <link rel="stylesheet" type="text/css" href="./css/bootstrap.min.css">
+        <link rel="stylesheet" type="text/css" href="./css/dataTables.bootstrap.min.css">
+        <link rel="stylesheet" type="text/css" href="./css/styles.css">
     </head>
     <body>
-        <table class="news" id="news" class="display" cellspacing="0" width="100%%">
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Company</th>
-                    <th>Source</th>
-                    <th>Title</th>
-                </tr>
-            </thead>
-            <tbody>
-                %(content)s
-            </tbody>
-        </table>
+        <div class="container">
+            <div>
+                <h2>News</h2>
+                <table id="news" class="news table table-striped table-bordered" cellspacing="0" width="100%%">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Company</th>
+                            <th>Source</th>
+                            <th>Title</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        %(news)s
+                    </tbody>
+                </table>
+            </div>
+            <div>
+                <h2>AT</h2>
+                <table id="at" class="at table table-striped table-bordered" cellspacing="0" width="100%%">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Company</th>
+                            <th>Signal or candle</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        %(at)s
+                    </tbody>
+                </table>
+            </div>
+        </div>
         <!-- Add jQuery plugin for easy table manipulation -->
         <script type="text/javascript">
             $(document).ready(function() {
                 $('#news').DataTable({
-                    // Show 100 records by default
-                    'iDisplayLength': 100,
+                    // Uncomment to show 100 records by default
+                    // 'iDisplayLength': 100,
+                    // Order by first column (date) by default
+                    "order": [[ 0, "desc" ]]
+                    });
+                $('#at').DataTable({
+                    // Uncomment to show 100 records by default
+                    // 'iDisplayLength': 100,
                     // Order by first column (date) by default
                     "order": [[ 0, "desc" ]]
                     });
@@ -89,8 +120,21 @@ NEWS_ELEMENT = """
 </tr>
 """
 
+AT_ELEMENT = """
+<tr class="at_element">
+    <td class="date">
+        %(date)s
+    </td>
+    <td class="company">
+        %(company)s
+    </td>
+    <td class="title %(direction)s">
+        <a href='%(url)s'>%(text)s</a>
+    </td>
+</tr>
+"""
 
-def generate_html_element(company, source, title_url, title_text, date):
+def generate_news_element(company, source, title_url, title_text, date):
     """Generate HTML for one element."""
     return NEWS_ELEMENT % {
         'company': company,
@@ -101,11 +145,21 @@ def generate_html_element(company, source, title_url, title_text, date):
         'date': date
     }
 
+def generate_at_element(company, direction, url, text, date):
+    """Generate HTML for one element."""
+    return AT_ELEMENT % {
+        'company': company,
+        'direction': direction,
+        'url': url,
+        'text': text,
+        'date': date
+    }
 
-def generate_html(news):
+
+def generate_html(news, at):
     """Generate whole HTML page."""
-    return HTML_TEMPLATE % {'content': news}
-
+    return HTML_TEMPLATE % {'news': news,
+                            'at': at }
 
 def store_output(output):
     """Store output as HTML file."""
@@ -115,12 +169,15 @@ def store_output(output):
 
 def main(verbose=False, open_in_browser=True):
     """Main function."""
-    output = ""
+    news_output = ""
+    # AT contains both candles and signals
+    at = ""
     for company in COMPANIES:
         if verbose:
             print "Processing %s company" % company
+        # GET NEWS FOR COMPANY
         # Load the HTML
-        page = requests.get(BASE_URL + company)
+        page = requests.get(NEWS_URL + company)
         # Page is not properly encoded
         page = page.text.encode('utf8')
         soup = BeautifulSoup(page, 'lxml')
@@ -137,8 +194,43 @@ def main(verbose=False, open_in_browser=True):
             # Get the date of the news
             date_tag = single_news.find(class_='record-date')
             date = date_tag.text
-            output += generate_html_element(company, source, title_url, title_text, date)
-    html_output = generate_html(output)
+            news_output += generate_news_element(company, source, title_url, title_text, date)
+        # GET TECHNICAL ANALYSIS
+        # Load the HTML
+        page = requests.get(AT_URL + company)
+        # Page is not properly encoded
+        page = page.text.encode('utf8')
+        soup = BeautifulSoup(page, 'lxml')
+        # From here, get the "formacje swiecowe" and "sygnaly AT"
+        candles_element = soup.find(id="profile-candlesticks")
+        candles = candles_element.findAll('tr')
+        for candle in candles:
+            candle_name_class = candle.find('td', class_='name').attrs.get('class', ['name'])
+            candle_link = candle.find('td', class_='name').find('a')
+            url = candle_link.attrs.get('href', '#')
+            text = candle_link.attrs.get('title', 'Error')
+            date = candle.find('td', class_='value').text
+            # candle_name_class should now contain only 'name' and down/up
+            # After we call 'remove' it's removed from the DOM object, so
+            # this has to be the last action
+            direction = candle_name_class.remove('name')
+
+            at += generate_at_element(company, direction, url, text, date)
+
+        signals_element = soup.find(id="profile-signals")
+        signals = signals_element.findAll('tr')
+        for signal in signals:
+            signal_name_class = signal.find('td', class_='name').attrs.get('class', ['name'])
+            signal_link = signal.find('td', class_='name').find('a')
+            url = signal_link.attrs.get('href', '#')
+            text = signal_link.attrs.get('title', 'Error')
+            date = signal.find('td', class_='value').text
+            # candle_name_class should now contain only 'name' and down/up
+            direction = signal_name_class.remove('name')
+
+            at += generate_at_element(company, direction, url, text, date)
+
+    html_output = generate_html(news_output, at)
     store_output(html_output)
     print "Finished"
     if open_in_browser:
