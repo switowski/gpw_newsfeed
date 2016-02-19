@@ -34,6 +34,7 @@ COMPANIES = [
     'VISTULA',
     'STALPROD',
     'IPX',
+    #'CRUDE-OIL-ROPA-NAFTOWA',
     # 'SP-500'
 ]
 
