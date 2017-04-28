@@ -26,16 +26,22 @@ FILE_NAME = "gpw.html"
 
 # Add names of companies (taken from biznesradar website)
 COMPANIES = [
-    'BIOTON',
     'BSC-DRUKARNIA-OPAKOWAN',
     'ELEMENTAL-HOLDING',
+    'ERG',
+    'FERRO',
+    'FORTE',
+    'INTER-CARS',
+    'JSW-JASTRZEBSKA-SPOLKA-WEGLOWA',
+    'LIVECHAT',
+    'LSI-SOFTWARE',
+    'MARVIPOL',
+    'MERCATOR',
+    'MONNARI-TRADE',
+    'PEPEES',
     'RAWLPLUG',
-    'TORPOL',
+    'ROBYG',
     'VISTULA',
-    'STALPROD',
-    'IPX',
-    #'CRUDE-OIL-ROPA-NAFTOWA',
-    # 'SP-500'
 ]
 
 HTML_TEMPLATE = """
